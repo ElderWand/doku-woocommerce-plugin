@@ -14,6 +14,7 @@ class DokuCheckoutService {
 
         $requestId = $this->dokuUtils->guidv4();
         $formattedPhoneNumber = $this->dokuUtils->formatPhoneNumber($params['phone']);
+        $formattedPhoneNumber = $this->dokuUtils->formatPhoneNumber($params['phone']);
         $targetPath= "/checkout/v1/payment";
         $dateTime = gmdate(DATE_ISO8601);
         $dateTimeFinal = substr($dateTime, 0, 19) . "Z";
@@ -25,7 +26,7 @@ class DokuCheckoutService {
                 "amount" => $params['amount'],
                 "callback_url" => $params['callback_url'],
                 "callback_url_cancel" => "https://www.doku.com/en-US",
-                "currency" => "IDR",
+                "currency" => $params['currency'],
                 "auto_redirect" => true,
                 "disable_retry_payment" => true,
                 "recover_abandoned_cart" => $params['recoverAbandonedCart'],
@@ -36,7 +37,7 @@ class DokuCheckoutService {
                 "amount" => $params['amount'],
                 "callback_url" => $params['callback_url'],
                 "callback_url_cancel" => "https://www.doku.com/en-US",
-                "currency" => "IDR",
+                "currency" => $params['currency'],
               	"recover_abandoned_cart" => $params['recoverAbandonedCart'],
               	"expired_recovered_cart" => $params['expiredRecoveredCart'],
             ),
@@ -62,7 +63,7 @@ class DokuCheckoutService {
                 "city" => $params['city_shipping'],
                 "postal_code" => $params['postal_code_shipping'],
                 "phone" => $formattedPhoneNumber,
-                "country_code" => "IDN"
+                "country_code" => $params['country']
             ),
             "billing_address" => array(
                 "first_name" => $params['first_name'],
@@ -71,7 +72,7 @@ class DokuCheckoutService {
                 "city" => $params['city_shipping'],
                 "postal_code" => $params['postal_code_shipping'],
                 "phone" => $formattedPhoneNumber,
-                "country_code" => "IDN"
+                "country_code" => $params['country']
             ),                        
             "additional_info" => array (
                 "integration" => array (
@@ -92,7 +93,7 @@ class DokuCheckoutService {
                 "amount" => $params['amount'],
                 "callback_url" => $params['callback_url'],
                 "callback_url_cancel" => "https://www.doku.com/en-US",
-                "currency" => "IDR",
+                "currency" => $params['currency'],
                 "auto_redirect" => true,
                 "disable_retry_payment" => true,
               	"recover_abandoned_cart" => $params['recoverAbandonedCart'],
@@ -103,7 +104,7 @@ class DokuCheckoutService {
                 "amount" => $params['amount'],
                 "callback_url" => $params['callback_url'],
                 "callback_url_cancel" => "https://www.doku.com/en-US",
-                "currency" => "IDR",
+                "currency" => $params['currency'],
               	"recover_abandoned_cart" => $params['recoverAbandonedCart'],
               	"expired_recovered_cart" => $params['expiredRecoveredCart'],
             ),
@@ -129,7 +130,7 @@ class DokuCheckoutService {
                 "city" => $params['city_shipping'],
                 "postal_code" => $params['postal_code_shipping'],
                 "phone" => $formattedPhoneNumber,
-                "country_code" => "IDN"
+                "country_code" => $params['country']
             ),
             "billing_address" => array(
                 "first_name" => $params['first_name'],
@@ -138,7 +139,7 @@ class DokuCheckoutService {
                 "city" => $params['city_shipping'],
                 "postal_code" => $params['postal_code_shipping'],
                 "phone" => $formattedPhoneNumber,
-                "country_code" => "IDN"
+                "country_code" => $params['country']
             ), 
             "additional_info" => array (
                 "integration" => array (

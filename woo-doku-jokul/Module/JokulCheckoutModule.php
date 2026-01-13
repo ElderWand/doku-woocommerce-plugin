@@ -9,6 +9,35 @@ require_once(DOKU_PAYMENT_PLUGIN_PATH . '/Common/JokulUtils.php');
 
 class DokuCheckoutModule extends WC_Payment_Gateway
 {
+    public $method_name;
+    public $method_code;
+    public $checkout_msg;
+    public $environmentPaymentJokul;
+    public $sandboxClientId;
+    public $sandboxSharedKey;
+    public $prodClientId;
+    public $prodSharedKey;
+    public $expiredTime;
+    public $emailNotifications;
+    public $abandonedCart;
+    public $timeRangeAbandonedCart;
+    public $customExpireDate;
+    public $channelName;
+    public $paymentDescription;
+    public $payment_method;
+    public $auto_redirect_jokul;
+    public $sac_check;
+    public $sac_textbox;
+    
+    // Services and Helpers
+    public $dokuUtils;
+    public $dokuCheckoutService;
+    public $dokuCheckStatusService;
+    public $dokuDB;
+    
+    // Order specific
+    public $orderId;
+
     public function __construct()
     {
         $this->init_form_fields();
@@ -101,12 +130,15 @@ class DokuCheckoutModule extends WC_Payment_Gateway
     public function get_order_data($order)
     {
         $pattern = "/[^A-Za-z0-9? .,_-]/";
-        $order_post = get_post($order->id);
+        $order_post = get_post($order->get_id());
         $dp = wc_get_price_decimals();
+        if (get_woocommerce_currency() == 'IDR') {
+            $dp = 0;
+        }
         $order_data = array();
         // add line items
         foreach ($order->get_items() as $item_id => $item) {
-            $product = $order->get_product_from_item($item);
+            $product = $item->get_product();
             $term_names = wp_get_post_terms( $item->get_product_id(), 'product_cat', array('fields' => 'names') );
             $categories_string = implode(',', $term_names);
             $product_id = null;
@@ -116,16 +148,16 @@ class DokuCheckoutModule extends WC_Payment_Gateway
 
             // Check if the product exists.
             if (is_object($product)) {
-                $product_id = isset($product->variation_id) ? $product->variation_id : $product->id;
+                $product_id = $product->get_id();
                 $product_sku = $product->get_sku();
                 $image_id  = $product->get_image_id();
                 $image_url = wp_get_attachment_image_url( $image_id, 'full' );
                 $product_url = $product->get_permalink();
             }
-            $meta = new WC_Order_Item_Meta($item, $product);
+            
             $item_meta = array();
-            foreach ($meta->get_formatted(null) as $meta_key => $formatted_meta) {
-                $item_meta[] = array('key' => $meta_key, 'label' => $formatted_meta['label'], 'value' => $formatted_meta['value']);
+            foreach ($item->get_formatted_meta_data('') as $meta_key => $formatted_meta) {
+                $item_meta[] = array('key' => $formatted_meta->key, 'label' => $formatted_meta->display_key, 'value' => $formatted_meta->display_value);
             }
             
             $order_data[] = array(
@@ -142,13 +174,13 @@ class DokuCheckoutModule extends WC_Payment_Gateway
         }
         // Add shipping.
         foreach ($order->get_shipping_methods() as $shipping_item_id => $shipping_item) {
-            $product = $order->get_product_from_item($item);
+            $product = isset($item) ? $item->get_product() : null;
             $image_url = null;
             $product_url = null;
 
             // Check if the product exists.
             if (is_object($product)) {
-                $product_id = isset($product->variation_id) ? $product->variation_id : $product->id;
+                $product_id = $product->get_id();
                 $product_sku = $product->get_sku();
                 $image_id  = $product->get_image_id();
                 $image_url = wp_get_attachment_image_url( $image_id, 'full' );
@@ -170,12 +202,12 @@ class DokuCheckoutModule extends WC_Payment_Gateway
         }
         // Add taxes.
         foreach ($order->get_tax_totals() as $tax_code => $tax) {
-            $product = $order->get_product_from_item($item);
+            $product = isset($item) ? $item->get_product() : null;
             $image_url = null;
             $product_url = null;
 
             if (is_object($product)) {
-                $product_id = isset($product->variation_id) ? $product->variation_id : $product->id;
+                $product_id = $product->get_id();
                 $image_id  = $product->get_image_id();
                 $image_url = wp_get_attachment_image_url( $image_id, 'full' );
                 $product_url = $product->get_permalink();
@@ -196,12 +228,12 @@ class DokuCheckoutModule extends WC_Payment_Gateway
         }
         // Add fees.
         foreach ($order->get_fees() as $fee_item_id => $fee_item) {
-            $product = $order->get_product_from_item($item);
+            $product = isset($item) ? $item->get_product() : null;
             $image_url = null;
             $product_url = null;
 
             if (is_object($product)) {
-                $product_id = isset($product->variation_id) ? $product->variation_id : $product->id;
+                $product_id = $product->get_id();
                 $image_id  = $product->get_image_id();
                 $image_url = wp_get_attachment_image_url( $image_id, 'full' );
                 $product_url = $product->get_permalink();
@@ -230,11 +262,19 @@ class DokuCheckoutModule extends WC_Payment_Gateway
         $pattern = "/[^A-Za-z0-9? .-\/+,=_:@]/";
         
         $order  = wc_get_order($order_id);
-        $amount = $order->order_total;
+        $currency = get_woocommerce_currency();
+        $amount = $order->get_total();
+        
+        if ($currency == 'IDR') {
+            $amount = number_format($amount, 0, '', '');
+        } else {
+            $amount = number_format($amount, 2, '.', '');
+        }
+
         $order_data = $order->get_data();
         
         $this->dokuUtils = new DokuUtils();
-        $formattedPhoneNumber = $this->dokuUtils->formatPhoneNumber($order->billing_phone);
+        $formattedPhoneNumber = $this->dokuUtils->formatPhoneNumber($order->get_billing_phone());
 
         $params = array(
             'customerId' => 0 !== $order->get_customer_id() ? $order->get_customer_id() : null,
@@ -246,8 +286,8 @@ class DokuCheckoutModule extends WC_Payment_Gateway
             'invoiceNumber' => $order->get_order_number(),
             'expiryTime' => $this->expiredTime,
             'phone' => $formattedPhoneNumber,
-            'country' => $order->billing_country,
-            'address' => preg_replace($pattern, "", $order->shipping_address_1),
+            'country' => $order->get_billing_country(),
+            'address' => preg_replace($pattern, "", $order->get_shipping_address_1()),
             'itemQty' => $this->get_order_data($order),
             'payment_method' => $this->payment_method,
             'postcode' => $order_data['billing']['postcode'],
@@ -262,12 +302,13 @@ class DokuCheckoutModule extends WC_Payment_Gateway
             'sac_check' => $this->sac_check,
             'auto_redirect' => $this->auto_redirect_jokul,
             'sac_textbox' => $this->sac_textbox,
-            'first_name_shipping' => $order->shipping_first_name,
-            'address_shipping' => preg_replace($pattern, "",$order->shipping_address_1),
-            'city_shipping' => $order->shipping_city,
-            'postal_code_shipping' => $order->shipping_postcode,
+            'first_name_shipping' => $order->get_shipping_first_name(),
+            'address_shipping' => preg_replace($pattern, "",$order->get_shipping_address_1()),
+            'city_shipping' => $order->get_shipping_city(),
+            'postal_code_shipping' => $order->get_shipping_postcode(),
             'recoverAbandonedCart' => ($this->abandonedCart === 'yes'),
-            'expiredRecoveredCart' => $this->calculateMinutes($this->abandonedCart, $this->timeRangeAbandonedCart, $this->customExpireDate)
+            'expiredRecoveredCart' => $this->calculateMinutes($this->abandonedCart, $this->timeRangeAbandonedCart, $this->customExpireDate),
+            'currency' => get_woocommerce_currency()
         );
 
         if ($this->environmentPaymentJokul == 'false') {
@@ -304,10 +345,14 @@ class DokuCheckoutModule extends WC_Payment_Gateway
                     'redirect' => $this->get_return_url($order) . "&jokul=show&" . $order_id
                 );
             } else {
+                file_put_contents(ABSPATH . 'doku_debug_response.txt', print_r($response, true));
                 wc_add_notice('There is something wrong. Please try again. ' . $response['message'][0], 'error');
+                return array('result' => 'fail', 'redirect' => '');
             }
         } else {
+            file_put_contents(ABSPATH . 'doku_debug_response.txt', "WP Error: " . $response->get_error_message());
             wc_add_notice('There is something wrong. Please try again.', 'error');
+            return array('result' => 'fail', 'redirect' => '');
         }
     }
 
